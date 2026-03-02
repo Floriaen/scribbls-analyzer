@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Scribbls Graph Explorer</title>
+</head>
+<body>
+    <!-- Graph canvas -->
+    <div id="graph-container">
+        <canvas id="graph-canvas"></canvas>
+    </div>
+
+    <!-- Node tooltip -->
+    <div id="tooltip" class="tooltip" style="display:none;">
+        <img id="tooltip-img" src="" alt="">
+        <div id="tooltip-name"></div>
+        <div id="tooltip-info"></div>
+    </div>
+
+    <!-- Sidebar -->
+    <div id="sidebar">
+        <div class="sidebar-header">
+            <h1>Scribbls</h1>
+            <div class="sidebar-actions">
+                <button id="layout-toggle" title="Toggle force layout">Layout</button>
+                <button id="sidebar-toggle" title="Collapse sidebar">&laquo;</button>
+            </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="panel" id="stats-panel">
+            <h2 class="panel-toggle">Dataset</h2>
+            <div class="panel-body" id="stats-content"></div>
+        </div>
+
+        <!-- Search -->
+        <div class="panel">
+            <h2 class="panel-toggle">Search</h2>
+            <div class="panel-body">
+                <input type="text" id="search-input" placeholder="Search drawings..." autocomplete="off">
+                <div id="search-results"></div>
+            </div>
+        </div>
+
+        <!-- Filters -->
+        <div class="panel">
+            <h2 class="panel-toggle">Filters</h2>
+            <div class="panel-body">
+                <div class="filter-row">
+                    <label>Min hearts: <span id="hearts-value">0</span></label>
+                    <input type="range" id="hearts-filter" min="0" max="240" value="0">
+                </div>
+                <div class="filter-row">
+                    <label><input type="checkbox" id="filter-ingredients" checked> Pure ingredients</label>
+                </div>
+                <div class="filter-row">
+                    <label><input type="checkbox" id="filter-deadends" checked> Dead ends</label>
+                </div>
+                <div class="filter-row">
+                    <label><input type="checkbox" id="filter-bridges" checked> Bridge nodes</label>
+                </div>
+            </div>
+        </div>
+
+        <!-- Chains -->
+        <div class="panel collapsed">
+            <h2 class="panel-toggle">Top Chains <span class="panel-badge" id="chains-count"></span></h2>
+            <div class="panel-body" id="chains-list"></div>
+        </div>
+
+        <!-- Outcomes -->
+        <div class="panel collapsed">
+            <h2 class="panel-toggle">Top Outcomes</h2>
+            <div class="panel-body" id="outcomes-list"></div>
+        </div>
+
+    </div>
+
+    <!-- Help overlay -->
+    <div id="help-panel">
+        <div class="help-title">How to use</div>
+        <div class="help-item"><span class="help-key">Scroll</span> Zoom in / out</div>
+        <div class="help-item"><span class="help-key">Drag background</span> Pan around</div>
+        <div class="help-item"><span class="help-key">Hover</span> Preview</div>
+        <div class="help-item"><span class="help-key">Click</span> Neighbors</div>
+        <div class="help-item"><span class="help-key">Click 2nd</span> Shortest path</div>
+        <div class="help-item"><span class="help-key">Click background</span> Reset</div>
+    </div>
+
+    <!-- Collapsed sidebar button -->
+    <button id="sidebar-open" style="display:none;" title="Open sidebar">&raquo;</button>
+
+    <!-- Status bar -->
+    <div id="status-bar">
+        <span id="status-text">Loading...</span>
+        <div id="path-bar" style="display:none;"></div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html>

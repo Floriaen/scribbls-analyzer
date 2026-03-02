@@ -1,0 +1,16 @@
+# Data & images
+data/
+images/
+web/data.json
+
+# Python
+venv/
+__pycache__/
+*.pyc
+
+# Node
+web/node_modules/
+web/dist/
+
+# OS
+.DS_Store
