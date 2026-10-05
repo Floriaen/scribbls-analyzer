@@ -73,7 +73,7 @@ def export_data(db_path: str, output_path: str):
         in_deg = G.in_degree(name)
         out_deg = G.out_degree(name)
         image = data.get("image")
-        # Make image path relative to web/ (via symlink)
+        # Make image path relative to web/public/
         if image:
             image = "images/drawings/" + os.path.basename(image)
         x, y = pos.get(name, (0, 0))
@@ -153,5 +153,5 @@ def export_data(db_path: str, output_path: str):
 
 
 if __name__ == "__main__":
-    output = os.path.join(config.BASE_DIR, "web", "data.json")
+    output = os.path.join(config.BASE_DIR, "web", "public", "data.json")
     export_data(config.DB_PATH, output)

@@ -12,7 +12,7 @@ REQUEST_TIMEOUT = 30
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "data", "scribbls.db")
-DRAWINGS_DIR = os.path.join(BASE_DIR, "images", "drawings")
-AVATARS_DIR = os.path.join(BASE_DIR, "images", "avatars")
+DRAWINGS_DIR = os.path.join(BASE_DIR, "web", "public", "images", "drawings")
+AVATARS_DIR = os.path.join(BASE_DIR, "web", "public", "images", "avatars")
 
 USER_AGENT = "Hello Zach :D"

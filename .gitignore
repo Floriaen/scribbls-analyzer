@@ -1,7 +1,3 @@
-# Data & images
-data/
-images/
-
 # Python
 venv/
 __pycache__/
