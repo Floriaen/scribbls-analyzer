@@ -96,9 +96,10 @@ function buildGraph(data) {
         edgesByNode.get(e.source).add(idx);
         edgesByNode.get(e.target).add(idx);
 
-        // Track max hearts on the result node
-        const target = nodeById.get(e.target);
-        if (e.hearts > target.hearts) target.hearts = e.hearts;
+        // Track max hearts on both ends, so ingredients aren't stuck at min size
+        for (const n of [nodeById.get(e.source), nodeById.get(e.target)]) {
+            if (e.hearts > n.hearts) n.hearts = e.hearts;
+        }
     });
 
     // Recompute node size based on hearts
