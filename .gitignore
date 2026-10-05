@@ -1,7 +1,6 @@
 # Data & images
 data/
 images/
-web/data.json
 
 # Python
 venv/
