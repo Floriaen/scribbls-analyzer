@@ -10,7 +10,7 @@ MAX_RETRIES = 3
 RETRY_BACKOFF = 2.0
 REQUEST_TIMEOUT = 30
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "data", "scribbls.db")
 DRAWINGS_DIR = os.path.join(BASE_DIR, "images", "drawings")
 AVATARS_DIR = os.path.join(BASE_DIR, "images", "avatars")
