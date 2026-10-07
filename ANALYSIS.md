@@ -2,76 +2,88 @@
 
 ## Dataset
 
-Full crawl of the "Most Hearted" archive, spanning **Jan 2006 – Jan 2015**.
+Every outcome reachable on scribbls.com. Recipes span **Jan 2006 – Dec 2017**.
 
-- **Pages crawled**: 132/132
-- **Outcomes**: 1,320
-- **Unique drawings**: 2,655
-- **Creators**: 155
-- **Graph nodes**: 2,655
-- **Graph edges**: 2,606
+- **Outcomes**: 4,102
+- **Unique drawings**: 4,550
+- **People**: 559 (495 made recipes, 479 drew results)
+- **Graph nodes**: 4,550
+- **Graph edges**: 8,078
 
-> **Survivorship note.** This is scraped from the *Most Hearted* browse only, so the
-> minimum heart count in the entire set is 6 — there are no low-scored outcomes at all.
-> This dataset is the community's **canon**, not its full output. Every finding below
-> describes *what succeeded*, not *what was made*.
+> **Two people, two dates.** The site separates *drawing* a result from *creating the
+> outcome* (the `A + B = C` recipe). 26% of outcomes were set up by someone other than
+> the artist, and in 36% the recipe came after the drawing, a median of 61 days later
+> (337 more than a year later). Below, "creator" means the
+> recipe's author and "artist" the person who drew the result.
 
 ## Connected Components
 
-- **Total**: 216
-- **Largest**: 1,850 nodes (70% of the graph)
-- **2nd largest**: 14 nodes
-- **Isolated clusters (< 5 nodes)**: 166
+- **Total**: 7
+- **Largest**: 4,533 nodes (99.6% of the graph)
+- **2nd largest**: 3 nodes
 
-One giant component absorbs most of the graph; the rest is a long tail of tiny
-one-off clusters — the signature of a hub-driven network.
+Scribbls is one connected web of ideas.
 
 ## Top Hubs (most combinations)
 
 | Drawing | Total | As input | As result |
 |---------|-------|----------|-----------|
-| Orange | 20 | 19 | 1 |
-| TRUTH | 18 | 17 | 1 |
-| bacon | 15 | 14 | 1 |
-| marx | 15 | 15 | 0 |
-| Bear | 14 | 14 | 0 |
-| Pirate | 13 | 13 | 0 |
-| not far from there | 13 | 13 | 0 |
-| Cat | 12 | 12 | 0 |
-| Squid | 12 | 12 | 0 |
-| Dynamite | 11 | 11 | 0 |
-| Pumpkin | 11 | 11 | 0 |
-| Robot | 11 | 10 | 1 |
+| man | 78 | 77 | 1 |
+| bacon | 38 | 37 | 1 |
+| Ax | 37 | 36 | 1 |
+| Beer | 33 | 32 | 1 |
+| Bear | 33 | 32 | 1 |
+| time | 31 | 30 | 1 |
+| water | 27 | 26 | 1 |
+| Orange | 26 | 25 | 1 |
+| not far from there | 26 | 25 | 1 |
+| TRUTH | 25 | 24 | 1 |
+| Cat | 25 | 24 | 1 |
+| Fish | 25 | 24 | 1 |
+
+`man` is the universal ingredient: used twice as often as anything else.
 
 ## Node Roles
 
-- **Pure ingredients** (only ever used as inputs): 1,335
-- **Dead ends** (results never reused): 1,026
-- **Bridges** (both input and result): 294
-- **Isolated**: 0 — every drawing is wired into at least one combination
+- **Pure ingredients** (never the result of an outcome): 448
+- **Dead ends** (results never reused): 917
+- **Bridges** (both input and result): 3,185
+- **Isolated**: 0
 
-Most creative output is **terminal**: 1,026 of 2,655 drawings were made and never built
-upon. The 294 bridge nodes are the connective tissue that holds the giant component
-together.
+The site had no way to make a drawing outside a combination, so the 448 pure ingredients
+are drawings whose recipe page no longer exists (the site answers "New drawings by request
+only. RIP Scribbls"). Examples: `Book`, `caramel`, `cold`, `spelling`, `15 years`.
 
-## Cycles (4 found)
+**70% of drawings are bridges**, both built from and built upon.
 
-Drawings that eventually lead back to themselves — rare cases of bidirectional or
-self-referential relationships.
+## Cycles
 
-- escalator → stairway → escalator
-- imaginary fiend → imaginary friend → imaginary fiend
-- dead bird → dart → dead bird
-- Infinite Thief (self-loop — steals itself)
+**147 cycles** of length ≤ 8, plus **18 self-loops**. Short examples:
+
+- Chicken → Egg → Chicken
+- more → less → more
+- fat guy → fit guy → fat guy
+- Alive crayfish → Dead crayfish → Alive crayfish
+- Legs → Wax → Legs
+- Infinite Thief + Infinite Thief = Infinite Thief (also `nothing`, `Duplicate`, `rabbit`…)
+
+Cycles are possible because recipes were often attached to drawings that already existed:
+`Egg` can be made from `Chicken` even though `Chicken` is later made from `Egg`.
 
 ## Longest Chains
 
-Longest build chain found: **5 steps**.
+Counting only causally consistent steps (an input counts only if its own recipe predates
+the recipe that uses it), the longest build chain is **24 steps**:
 
-- Woman → man → Ninja → Ginger Ninja → Gingerer Ninja → Desert Ninja
+- melons → girl → her → Hammer → Marmalade → dangerous breakfast → Mysteries of India →
+  Mysteries of Pakistan → … → Mysteries of Russia → Mysteries of Alaska
 
-But chains this deep are the exception. Most combinations bottom out in 1–2 steps,
-because the community rewards the *joke*, not the lineage (see Heart Economics below).
+The tail is one long relay of 19 "Mysteries of …" drawings. Chains are deep in general:
+the median result sits 3 steps from the start of its chain, and 1,151 results sit 6 or
+more steps deep.
+
+The time filter drops 2,213 of the 8,078 edges: more than a quarter of combinations used
+an input whose recipe was only added afterwards.
 
 ## Most Hearted Outcomes
 
@@ -89,137 +101,134 @@ because the community rewards the *joke*, not the lineage (see Heart Economics b
 | Godzilla | Pirate | Yarrzilla | 89 | zaratustra |
 | Kool aid | Brick Wall | Oh Yeah | 85 | Paul |
 | Link | Link | chain | 78 | mattishere |
-| Squid | Space | Admiral Ackbar | 73 | Zach |
+| Squid | Space | Admiral Ackbar | 73 | jmullan (drawn by Zach) |
 | tiny penis | ego | Hummer | 73 | derek |
 | Godzilla | Atheist | zilla | 72 | mattishere |
 
 ## The Production Economy
 
-A steep power law sits over 155 creators, and **volume and quality are different people**.
+A steep power law over 495 recipe creators: the top 10 made **58%** of all outcomes, while
+281 people made exactly one.
 
-**Most prolific (by outcomes):**
+**Most prolific (by outcomes created):**
 
 | Creator | Outcomes | Total hearts | Avg hearts | Best |
 |---------|----------|--------------|------------|------|
-| Zach | 172 | 2,684 | 15.6 | 152 |
-| Floriaen | 123 | 1,612 | 13.1 | 42 |
-| jmullan | 109 | 1,491 | 13.7 | 56 |
-| Paul | 95 | 1,920 | 20.2 | 160 |
-| Alex | 88 | 1,561 | 17.7 | 240 |
+| Zach | 498 | 4,160 | 8.4 | 152 |
+| jmullan | 386 | 2,724 | 7.1 | 73 |
+| Paul | 318 | 2,946 | 9.3 | 160 |
+| mattishere | 302 | 1,820 | 6.0 | 78 |
+| Floriaen | 213 | 2,175 | 10.2 | 42 |
+| Alex | 209 | 2,280 | 10.9 | 240 |
 
-**Highest quality (avg hearts, min 3 outcomes):**
+**Highest quality (artist avg hearts, min 5 drawings):**
 
-| Creator | Outcomes | Avg hearts |
-|---------|----------|------------|
-| Veronica | 5 | 39.2 |
-| derek | 4 | 33.0 |
-| smoothio | 4 | 26.3 |
-| jesse | 4 | 24.5 |
-| zaratustra | 6 | 23.3 |
+| Artist | Drawings | Avg hearts |
+|--------|----------|------------|
+| smoothio | 6 | 19.3 |
+| ding | 9 | 17.9 |
+| Veronica | 13 | 17.5 |
+| Meowfish | 12 | 14.3 |
+| SadXuHuang | 52 | 13.7 |
 
-The two leaderboards barely overlap. Paul is the rare creator who is both prolific
-(95) and excellent (20.2 avg) — he owns two of the all-time top hits.
+Volume and quality are different people. Among the big producers, Alex (10.9) and
+Floriaen (10.2) have the highest averages.
+
+**Curators.** Some people mostly wired up *other people's* drawings: mattishere created
+196 outcomes for drawings by someone else, Fraggle 146, Zach 77. They were part of the
+site's maintenance, connecting existing art into recipes, sometimes years later.
 
 ## Collaboration Network
 
-Attributing each drawing to the creator of the outcome that first produced it, then
-inspecting what every combination was built *on* (2,640 input-uses):
+Attributing each drawing to its artist, then looking at what every combination was built
+*on* (8,204 input-uses):
 
-- **2,102 (80%)** use a base primitive
-- **402 (15%)** build on **someone else's** result
-- **136 (5%)** build on the creator's **own** result
+- **554 (7%)** use a pure ingredient
+- **5,623 (69%)** build on **someone else's** drawing
+- **2,027 (25%)** build on the creator's **own** drawing
 
-When people remixed existing work, they chose **strangers' results over their own
-roughly 3:1** — this is genuine co-creation, not solo chaining.
+People chose **strangers' work over their own roughly 3:1**.
 
-**Most influential (results most reused by others):**
+**Most influential (drawings most reused by others):**
 
-| Creator | Times their results were reused |
-|---------|---------------------------------|
-| Paul | 56 |
-| jmullan | 47 |
-| Alex | 32 |
-| jmay | 31 |
-| Zach | 29 |
-
-These "seed-makers" — whose outputs others build on — form yet a third population,
-distinct from the volume and quality leaders.
+| Artist | Times their drawings were reused |
+|--------|----------------------------------|
+| jmullan | 999 |
+| Paul | 888 |
+| Zach | 799 |
+| Alex | 289 |
+| Fraggle | 209 |
 
 ## Community Lifecycle
 
-Activity over the 9-year span is not smooth; it has two distinct heartbeats:
+Recipes per year: 2006: 59 · 2007: 201 · **2008: 2,134** · 2009: 1,112 · 2010: 271 ·
+2011: 208 · 2012: 49 · 2013: 40 · 2014: 7 · 2015: 8 · 2017: 13.
 
-- **June 2008**: 261 outcomes — the first and largest surge
-- **October 2009**: 199 outcomes — the second surge
+Activity has two heartbeats:
 
-Between and after these peaks, output declines steadily through 2012 and sputters out
-by 2015. The early months also carried the highest average hearts (Mar 2008 ≈ 58,
-May 2008 ≈ 35) — the all-time greats were made early.
+- **June 2008**: 910 outcomes in one month, 22% of everything ever made
+- **October 2009**: 340 outcomes, the second surge
+
+The best-rated months are spread out: Oct 2010 (13.1 avg hearts), Jan 2009 (11.2).
 
 ## The Naming Engine
 
-The core creative mechanic is **wordplay**, not visual blending.
+The core creative mechanic is **wordplay**.
 
-- **485 of 1,320 results (37%)** are literal linguistic blends of their inputs:
-  `squash + big foot = sasquash`, `Pen + Island = Penis Land`,
-  `German + Sock = Socktoberfest`, `Green + red = Gred`.
-- **34 self-combinations** form a recognized "doubling" idiom:
-  `Link + Link = chain`, `bacon + bacon = Awesome`, `Pew + Pew = Pew Pew`.
-
-The game is fundamentally a pun rendered as a drawing.
+- **785 of 4,102 results (19%)** share at least 3 letters in a row with *both* inputs:
+  `Domo Kun + Homosexuals = Domosexuals`, `Pen + Island = Penis Land`,
+  `Zombie + Tay Zonday = Tay Zombay`.
+- **126 self-combinations** form a "doubling" idiom:
+  `Link + Link = chain`, `bacon + bacon = Awesome`, `Beep + Beep = Road Runner`.
 
 ## Generative Primitives
 
-Ranking ingredients by the total hearts of everything they produced reveals "golden
-inputs" — concepts that almost always yield a hit:
+Ranking inputs by the total hearts of everything they produced:
 
 | Ingredient | Used in | Offspring hearts | Avg |
 |------------|---------|------------------|-----|
-| God | 7 | 319 | 45.6 |
-| vodka | 4 | 276 | 69.0 |
-| bacon | 14 | 263 | 18.8 |
-| Wizard | 4 | 220 | 55.0 |
-| Unicorns | 3 | 184 | 61.3 |
+| God | 20 | 380 | 19.0 |
+| bacon | 37 | 353 | 9.5 |
+| man | 77 | 342 | 4.4 |
+| Bear | 32 | 316 | 9.9 |
+| Pirate | 22 | 300 | 13.6 |
+| vodka | 8 | 293 | 36.6 |
 
-`vodka`, `Wizard`, and `Unicorns` are used rarely but convert nearly every time —
-high-leverage concepts, distinct from high-volume hubs like Orange and Bear.
+`man` is used most but its offspring average only 4.4 hearts. `vodka` and `God` are the
+high-leverage concepts.
 
 ## Heart Economics
 
-- **Mean hearts**: 15.4 · **Max**: 240 · **Floor**: 6 (browse filter)
-- Distribution: 1,173 outcomes at 6–20 hearts, 113 at 21–50, **34 above 50**
-- Building on a prior result (avg 15.2) earns **no more** than building on a primitive
-  (avg 15.4). The community rewards the punchline, not the depth of lineage — which is
-  exactly why build chains stay shallow.
+- **Mean hearts**: 7.8 · **Median**: 6 · **Max**: 240 · **Min**: 0
+- Distribution: 1,829 outcomes at 0–5 hearts, 2,126 at 6–20, 113 at 21–50, **34 above 50**
+- Deeper lineage earns slightly *more*: results 0–1 steps from the start of their chain
+  average 6.8 hearts, results 6+ steps deep average 8–9.
 
 ## Insights
 
 ### A crowd-sourced ontology of association
 
-Combinations encode how people *understand* concepts through associative reasoning
-rather than definition. `vampire + Fly = Mosquito` decomposes a mosquito into its
-core traits — blood-sucking and flying. This is concept blending at scale, produced
-collaboratively by 155 people over nearly a decade.
+Combinations encode how people *understand* concepts through associative reasoning rather
+than definition. `vampire + Fly = Mosquito` decomposes a mosquito into its core traits.
+This is concept blending at scale, produced by 559 people over a decade.
 
-### Three distinct creator populations
+### Four creator populations
 
-Grinders (Zach), snipers (Veronica, derek), and seed-makers (Paul, jmullan) are largely
-different people. The community's output depends on all three roles, and only Paul spans
-more than one.
+Grinders (Zach, jmullan), snipers (smoothio, ding, Veronica), seed-makers whose drawings
+others build on (jmullan, Paul, Zach), and curators who turned existing drawings into
+recipes (mattishere, Fraggle).
 
-### Creativity is mostly terminal, collaboration is mostly social
+### Creativity is mostly connective
 
-1,026 drawings are dead ends, yet of the work that *was* reused, 3 in 4 reuses were of
-*someone else's* output. People rarely built on the community's results — but when they
-did, they reached for strangers' ideas, not their own.
+Scribbls is one component where 70% of
+drawings are both built from and built upon, chains run to 24 steps, and 69% of all
+combinations reuse someone else's drawing.
 
 ### Potential applications
 
-- **Scored humor / analogy dataset**: 1,320 labeled `A + B = C` triples with a human
-  funniness signal (hearts) — clean training data for analogical reasoning or
-  computational humor.
-- **Portmanteau corpus**: the 485 blends map input words to a blended output word.
-- **Influence graph**: a creator-attribution network (seed-makers → remixers) that the
-  drawing graph alone does not surface.
-- **Creativity metrics**: chain length and branching factor measure how *generative* a
-  concept is — whether it sparks further creation or ends the thread.
+- **Scored humor / analogy dataset**: 4,102 labeled `A + B = C` triples with a funniness
+  signal (hearts), low-scored ones included.
+- **Portmanteau corpus**: the 785 blends map input words to a blended output word.
+- **Influence graph**: an artist-attribution network (seed-makers → remixers → curators).
+- **Creativity metrics**: chain depth and branching factor measure how *generative* a
+  concept is.
