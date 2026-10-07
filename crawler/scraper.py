@@ -50,20 +50,16 @@ def _parse_outcome_row(row, page_number) -> Outcome | None:
     if fav_strong:
         hearts = int(fav_strong.get_text(strip=True))
 
-    # Creator and date from p.created
-    created_p = row.find("p", class_="created")
-    creator, created_text, created_at = _parse_created(created_p)
+    created = _parse_created(row.find("p", class_="created"))
 
     return Outcome(
         outcome_id=outcome_id,
         input_a=input_a,
         input_b=input_b,
         result=result,
-        creator=creator,
         hearts=hearts,
-        created_text=created_text,
-        created_at=created_at,
         browse_page=page_number,
+        **created,
     )
 
 
@@ -74,42 +70,60 @@ def _parse_drawing(dbox) -> Drawing:
     return Drawing(name=name, image_url=image_url)
 
 
-def _parse_created(created_p):
-    if not created_p:
-        return Creator("unknown", 0, None), "", None
+DATE = r"(\w+ \d+, \d+ at \d+:\d+[ap]m)"
 
-    # Creator: from <cite><a>...Username #N</a></cite>
-    cite = created_p.find("cite")
-    if not cite:
-        return Creator("unknown", 0, None), "", None
 
+def _parse_created(created_p) -> dict:
+    """p.created comes in three shapes:
+      "A created this outcome and drew X on D."
+      "A created this outcome on D1 and drew X on D2."
+      "A drew X on D1.<br>B created this outcome on D2."
+    """
+    people = {}
+    for cite in created_p.find_all("cite") if created_p else []:
+        # The text up to the next <cite> says what this person did
+        role = ""
+        for sib in cite.next_siblings:
+            if getattr(sib, "name", None) == "cite":
+                break
+            role += sib.get_text() if hasattr(sib, "get_text") else str(sib)
+        if "created this outcome" in role:
+            people["creator"] = _parse_person(cite)
+        if "drew" in role:
+            people["artist"] = _parse_person(cite)
+
+    text = created_p.get_text(" ", strip=True) if created_p else ""
+    created_text = _search(rf"created this outcome (?:and drew .+? )?on {DATE}", text)
+    drawn_text = _search(rf"drew .+? on {DATE}", text)
+    return {
+        "creator": people.get("creator", Creator("unknown", 0, None)),
+        "created_text": created_text,
+        "created_at": _iso(created_text),
+        "artist": people.get("artist"),
+        "drawn_text": drawn_text,
+        "drawn_at": _iso(drawn_text),
+    }
+
+
+def _parse_person(cite) -> Creator:
+    # <cite><a><img src="avatar">Username #N</a></cite>
     cite_a = cite.find("a")
     avatar_img = cite_a.find("img") if cite_a else None
     avatar_url = avatar_img["src"] if avatar_img else None
-
-    # Get the text after the img tag inside the <a>
     cite_text = cite_a.get_text(strip=True) if cite_a else ""
-    # Parse "Alex #32" or "zaratustra #104"
-    creator_match = re.search(r"^(.+?)\s*#(\d+)$", cite_text)
-    if creator_match:
-        username = creator_match.group(1).strip()
-        number = int(creator_match.group(2))
-    else:
-        username = cite_text or "unknown"
-        number = 0
+    match = re.search(r"^(.+?)\s*#(\d+)$", cite_text)
+    if match:
+        return Creator(match.group(1).strip(), int(match.group(2)), avatar_url)
+    return Creator(cite_text or "unknown", 0, avatar_url)
 
-    # Date: full text of p.created contains "on Mar 13, 2008 at 7:09pm."
-    full_text = created_p.get_text(" ", strip=True)
-    created_text = ""
-    created_at = None
 
-    date_match = re.search(r"on\s+(\w+ \d+, \d+ at \d+:\d+[ap]m)", full_text)
-    if date_match:
-        created_text = date_match.group(1)
-        try:
-            dt = datetime.strptime(created_text, "%b %d, %Y at %I:%M%p")
-            created_at = dt.isoformat()
-        except ValueError:
-            pass
+def _search(pattern: str, text: str) -> str:
+    match = re.search(pattern, text)
+    return match.group(1) if match else ""
 
-    return Creator(username, number, avatar_url), created_text, created_at
+
+def _iso(date_text: str) -> str | None:
+    try:
+        return datetime.strptime(date_text, "%b %d, %Y at %I:%M%p").isoformat()
+    except ValueError:
+        return None

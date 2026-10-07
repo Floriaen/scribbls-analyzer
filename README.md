@@ -38,7 +38,20 @@ python3 crawler/crawl.py --pages 0
 
 # Crawl pages only, skip image downloads
 python3 crawler/crawl.py --pages 20 --no-images
+
+# Re-crawl browse pages already done (e.g. after a parser fix)
+python3 crawler/crawl.py --refresh --pages 0
+
+# Fetch the recipe of every drawing missing from browse, following new inputs (0 for all)
+python3 crawler/crawl.py --recipes 0
 ```
+
+Browse only lists outcomes with 9+ hearts. Every other recipe is on the drawing's own
+page (`/outcomes/<Name>`), which `--recipes` fetches.
+
+The crawler waits 10s between every request (robots.txt `Crawl-delay`), backs off on
+errors and stops after 5 in a row. Progress is stored in the database, so re-running
+resumes where it stopped.
 
 ### Query the database
 

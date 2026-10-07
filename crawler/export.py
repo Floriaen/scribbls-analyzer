@@ -31,31 +31,32 @@ def load_graph(db_path: str) -> nx.DiGraph:
 
 
 def compute_chains(G: nx.DiGraph, top_n=20, max_depth=10):
-    sources = [n for n in G.nodes() if G.out_degree(n) > 0]
-    targets = [n for n in G.nodes() if G.out_degree(n) == 0 and G.in_degree(n) > 0]
+    """Chains ending at a dead end, ranked by average hearts per step.
 
-    best_chains = []
-    for source in sources:
-        for target in targets:
-            try:
-                for path in nx.all_simple_paths(G, source, target, cutoff=max_depth):
-                    if len(path) < 3:
-                        continue
-                    total_hearts = 0
-                    steps = 0
-                    for i in range(len(path) - 1):
-                        edge_data = G.get_edge_data(path[i], path[i + 1])
-                        if edge_data:
-                            total_hearts += edge_data.get("weight", 0)
-                            steps += 1
-                    if steps > 0:
-                        avg = total_hearts / steps
-                        best_chains.append((avg, steps, path))
-            except nx.NetworkXError:
-                pass
+    Enumerating every simple path explodes on a dense graph, so instead keep, for each
+    step count k and node v, the best-scoring k-step path ending at v (one candidate per
+    dead end and length).
+    """
+    targets = {n for n in G.nodes() if G.out_degree(n) == 0 and G.in_degree(n) > 0}
 
-    best_chains.sort(key=lambda x: (-x[0], -x[1]))
-    return best_chains[:top_n]
+    # best[v] = (total hearts, path) of the best path of the current length ending at v
+    best = {n: (0, [n]) for n in G.nodes() if G.out_degree(n) > 0}
+    chains = []
+    for steps in range(1, max_depth + 1):
+        nxt = {}
+        for u, (total, path) in best.items():
+            for v in G.successors(u):
+                if v in path:  # keep paths simple across the few cycles
+                    continue
+                score = total + G[u][v].get("weight", 0)
+                if v not in nxt or score > nxt[v][0]:
+                    nxt[v] = (score, path + [v])
+        best = nxt
+        if steps >= 2:
+            chains += [(score / steps, steps, path) for v, (score, path) in best.items() if v in targets]
+
+    chains.sort(key=lambda x: (-x[0], -x[1]))
+    return chains[:top_n]
 
 
 def export_data(db_path: str, output_path: str):
@@ -101,18 +102,21 @@ def export_data(db_path: str, output_path: str):
     outcomes = []
     for row in conn.execute("""
         SELECT o.id, d1.name, d2.name, d3.name, o.hearts,
-               c.username || ' #' || c.number, o.created_at
+               c.username || ' #' || c.number, o.created_at,
+               a.username || ' #' || a.number, o.drawn_at
         FROM outcomes o
         JOIN drawings d1 ON o.input_a_id = d1.id
         JOIN drawings d2 ON o.input_b_id = d2.id
         JOIN drawings d3 ON o.result_id = d3.id
         JOIN creators c ON o.creator_id = c.id
+        LEFT JOIN creators a ON o.artist_id = a.id
         ORDER BY o.hearts DESC
     """):
         outcomes.append({
             "id": row[0], "inputA": row[1], "inputB": row[2],
             "result": row[3], "hearts": row[4],
             "creator": row[5], "date": row[6],
+            "artist": row[7], "drawnAt": row[8],
         })
 
     # Chains

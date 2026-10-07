@@ -31,12 +31,23 @@ CREATE TABLE IF NOT EXISTS outcomes (
     hearts          INTEGER NOT NULL DEFAULT 0,
     created_at      TEXT,
     raw_created_text TEXT,
-    browse_page     INTEGER
+    browse_page     INTEGER,
+    artist_id       INTEGER REFERENCES creators(id),
+    drawn_at        TEXT,
+    raw_drawn_text  TEXT
 );
 
 CREATE TABLE IF NOT EXISTS crawl_state (
     page_number     INTEGER PRIMARY KEY,
     status          TEXT NOT NULL DEFAULT 'pending',
+    crawled_at      TEXT,
+    error_message   TEXT
+);
+
+-- /outcomes/<name> pages fetched to find the recipe of drawings missing from browse
+CREATE TABLE IF NOT EXISTS recipe_pages (
+    name            TEXT PRIMARY KEY,
+    status          TEXT NOT NULL,  -- done | missing (404) | error
     crawled_at      TEXT,
     error_message   TEXT
 );
@@ -58,6 +69,32 @@ class Database:
 
     def init_schema(self):
         self.conn.executescript(SCHEMA)
+        # Databases created before artist/drawn date were tracked
+        columns = {r[1] for r in self.conn.execute("PRAGMA table_info(outcomes)")}
+        for col, decl in [("artist_id", "INTEGER REFERENCES creators(id)"),
+                          ("drawn_at", "TEXT"), ("raw_drawn_text", "TEXT")]:
+            if col not in columns:
+                self.conn.execute(f"ALTER TABLE outcomes ADD COLUMN {col} {decl}")
+        self.conn.commit()
+
+    def reset_browse_pages(self):
+        self.conn.execute("UPDATE crawl_state SET status = 'pending'")
+        self.conn.commit()
+
+    def get_drawings_without_recipe(self):
+        """Drawings no known outcome produces, whose page hasn't been fetched yet."""
+        return [r[0] for r in self.conn.execute("""
+            SELECT d.name FROM drawings d
+            WHERE NOT EXISTS (SELECT 1 FROM outcomes o WHERE o.result_id = d.id)
+              AND NOT EXISTS (SELECT 1 FROM recipe_pages p WHERE p.name = d.name AND p.status != 'error')
+            ORDER BY d.id
+        """)]
+
+    def mark_recipe_page(self, name, status, error_message=None):
+        self.conn.execute(
+            "INSERT OR REPLACE INTO recipe_pages (name, status, crawled_at, error_message) VALUES (?, ?, ?, ?)",
+            (name, status, datetime.now(timezone.utc).isoformat(), error_message),
+        )
         self.conn.commit()
 
     def seed_crawl_state(self, total_pages):
@@ -121,15 +158,25 @@ class Database:
         b_id = self.get_or_create_drawing(outcome.input_b)
         r_id = self.get_or_create_drawing(outcome.result)
         c_id = self.get_or_create_creator(outcome.creator)
+        artist_id = self.get_or_create_creator(outcome.artist) if outcome.artist else None
         self.conn.execute(
             """INSERT INTO outcomes (id, input_a_id, input_b_id, result_id,
-                                    creator_id, hearts, created_at, raw_created_text, browse_page)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(id) DO UPDATE SET hearts = excluded.hearts""",
+                                    creator_id, hearts, created_at, raw_created_text, browse_page,
+                                    artist_id, drawn_at, raw_drawn_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                hearts = excluded.hearts,
+                creator_id = excluded.creator_id,
+                created_at = excluded.created_at,
+                raw_created_text = excluded.raw_created_text,
+                artist_id = excluded.artist_id,
+                drawn_at = excluded.drawn_at,
+                raw_drawn_text = excluded.raw_drawn_text,
+                browse_page = COALESCE(excluded.browse_page, outcomes.browse_page)""",
             (
                 outcome.outcome_id, a_id, b_id, r_id, c_id,
                 outcome.hearts, outcome.created_at, outcome.created_text,
-                outcome.browse_page,
+                outcome.browse_page, artist_id, outcome.drawn_at, outcome.drawn_text,
             ),
         )
         self.conn.commit()

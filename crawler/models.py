@@ -21,8 +21,11 @@ class Outcome:
     input_a: Drawing
     input_b: Drawing
     result: Drawing
-    creator: Creator
+    creator: Creator              # who created the outcome (the recipe)
     hearts: int
     created_text: str
     created_at: Optional[str]
+    artist: Optional[Creator] = None  # who drew the result; often not the outcome creator
+    drawn_text: str = ""
+    drawn_at: Optional[str] = None
     browse_page: Optional[int] = None
