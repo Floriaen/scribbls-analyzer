@@ -396,38 +396,157 @@ body {
     margin-top: 2px;
 }
 
+/* Most used */
+.used-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.used-rank {
+    width: 18px;
+    color: #555;
+    font-size: 11px;
+    text-align: right;
+}
+
+.used-item img,
+.used-img {
+    width: 32px;
+    height: 32px;
+    border-radius: 4px;
+    background: #fff;
+    flex-shrink: 0;
+}
+
+.used-name {
+    flex: 1;
+    min-width: 0;
+    color: #ddd;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.used-count {
+    color: #e94560;
+    font-weight: 600;
+    font-size: 11px;
+}
+
 /* Tooltip */
 .tooltip {
     position: fixed;
-    background: rgba(10, 10, 30, 0.95);
-    border: 1px solid #333;
-    border-radius: 6px;
-    padding: 10px;
+    width: 240px;
+    background: rgba(14, 14, 36, 0.97);
+    border: 1px solid #2c2c4a;
+    border-radius: 12px;
+    padding: 14px;
     z-index: 20;
     pointer-events: none;
-    max-width: 200px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
     text-align: center;
 }
 
-.tooltip img {
-    width: 64px;
-    height: 64px;
-    border-radius: 4px;
-    margin-bottom: 6px;
-    background: #1a1a2e;
+.tt-image {
+    display: block;
+    width: 120px;
+    height: 120px;
+    margin: 0 auto 10px;
+    border-radius: 8px;
+    background: #fff;
 }
 
-#tooltip-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: #eee;
+.tt-name {
+    font-size: 15px;
+    font-weight: 700;
+    color: #f2f2f8;
+    overflow-wrap: anywhere;
 }
 
-#tooltip-info {
+.tt-badges {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.badge {
+    padding: 2px 9px;
+    border-radius: 999px;
     font-size: 11px;
-    color: #888;
-    margin-top: 2px;
+    font-weight: 600;
+    border: 1px solid transparent;
 }
+
+.badge-ingredient { background: rgba(233, 69, 96, 0.15); color: #ff8098; border-color: rgba(233, 69, 96, 0.4); }
+.badge-deadend    { background: rgba(140, 150, 190, 0.12); color: #aab2d0; border-color: rgba(140, 150, 190, 0.35); }
+.badge-bridge     { background: rgba(70, 140, 255, 0.15); color: #7fb2ff; border-color: rgba(70, 140, 255, 0.4); }
+.badge-isolated   { background: rgba(255, 255, 255, 0.06); color: #999; border-color: #444; }
+.badge-hearts     { background: rgba(255, 90, 120, 0.12); color: #ff6b88; border-color: rgba(255, 90, 120, 0.3); }
+
+.tt-recipe {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 12px;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid #26264a;
+    border-radius: 8px;
+}
+
+.tt-ingredient {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #ccc;
+}
+
+.tt-ingredient span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.tt-thumb {
+    width: 48px;
+    height: 48px;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.tt-plus {
+    color: #666;
+    font-weight: 700;
+}
+
+.tt-more {
+    margin-top: 4px;
+    font-size: 10px;
+    color: #777;
+}
+
+.tt-meta {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 3px 10px;
+    margin: 12px 0 0;
+    padding-top: 10px;
+    border-top: 1px solid #26264a;
+    font-size: 11px;
+    text-align: left;
+}
+
+.tt-meta dt { color: #777; }
+.tt-meta dd { margin: 0; color: #ddd; overflow-wrap: anywhere; }
+.tt-muted { color: #666; font-style: italic; }
 
 /* Help overlay */
 #help-panel {

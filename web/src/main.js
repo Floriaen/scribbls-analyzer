@@ -70,6 +70,8 @@ function buildGraph(data) {
         nodeType: getNodeType(n),
         hearts: 0,
         hidden: false,
+        recipes: [],   // outcomes that produced this drawing
+        usedIn: 0,     // outcomes this drawing was an input of
     }));
 
     nodes.forEach((n) => {
@@ -77,6 +79,15 @@ function buildGraph(data) {
         neighbors.set(n.id, new Set());
         edgesByNode.set(n.id, new Set());
     });
+
+    data.outcomes.forEach((o) => {
+        nodeById.get(o.result)?.recipes.push(o);
+        for (const k of new Set([o.inputA, o.inputB])) {
+            const n = nodeById.get(k);
+            if (n) n.usedIn++;
+        }
+    });
+    nodes.forEach((n) => n.recipes.sort((a, b) => (a.date || "").localeCompare(b.date || "")));
 
     edges = [];
     data.edges.forEach((e, i) => {
@@ -108,15 +119,28 @@ function buildGraph(data) {
         n.size = 6 + ratio * 28;
     });
 
-    // Preload images
+    // Preload images, plus a pre-clipped round thumbnail so most frames skip the per-node clip()
     nodes.forEach((n) => {
         if (n.image) {
             const img = new Image();
             img.src = n.image;
-            img.onload = () => { imageCache.set(n.id, img); };
+            img.onload = () => {
+                const thumb = document.createElement("canvas");
+                thumb.width = thumb.height = THUMB_SIZE;
+                const t = thumb.getContext("2d");
+                t.beginPath();
+                t.arc(THUMB_SIZE / 2, THUMB_SIZE / 2, THUMB_SIZE / 2, 0, Math.PI * 2);
+                t.clip();
+                t.drawImage(img, 0, 0, THUMB_SIZE, THUMB_SIZE);
+                imageCache.set(n.id, { img, thumb });
+                draw();
+            };
         }
     });
 }
+
+// ponytail: fixed 64px thumbnails; past that on-screen size, draw() falls back to clipping the full image
+const THUMB_SIZE = 64;
 
 // ── Canvas setup ──────────────────────────────────────────────
 function initCanvas() {
@@ -126,6 +150,13 @@ function initCanvas() {
 
     const container = document.getElementById("graph-container");
     new ResizeObserver(resizeCanvas).observe(container);
+
+    const labelsToggle = document.getElementById("show-labels");
+    showLabels = labelsToggle.checked;
+    labelsToggle.addEventListener("change", () => {
+        showLabels = labelsToggle.checked;
+        draw();
+    });
 
     // Zoom & pan
     zoomBehavior = d3.zoom()
@@ -300,7 +331,27 @@ function initSimulation() {
 }
 
 // ── Draw ──────────────────────────────────────────────────────
+// Zoom, hover, drag, image loads and simulation ticks all call draw(); render at most once per frame.
+let drawPending = false;
+
 function draw() {
+    if (drawPending) return;
+    drawPending = true;
+    requestAnimationFrame(() => {
+        drawPending = false;
+        render();
+    });
+}
+
+const EDGE_STYLES = {
+    dimmed: { stroke: "rgba(30,30,50,0.15)", width: 0.5 },
+    normal: { stroke: "rgba(83,52,131,0.5)", width: 1.5 },
+    highlighted: { stroke: "#e94560", width: 3 },
+};
+const LABEL_MARGIN = 200; // labels extend to the right of their node, in graph units
+let showLabels = true;
+
+function render() {
     if (!ctx) return;
     const w = canvas.clientWidth;
     const h = canvas.clientHeight;
@@ -311,57 +362,72 @@ function draw() {
     ctx.scale(transform.k, transform.k);
 
     const zoomLevel = transform.k;
+    const dpr = window.devicePixelRatio || 1;
 
-    // Draw edges
+    // Visible area in graph coordinates; anything outside is skipped
+    const [x0, y0] = transformPoint(0, 0);
+    const [x1, y1] = transformPoint(w, h);
+    const pad = 40;
+
+    // Draw edges, batched into one path per style
+    const batches = { dimmed: [], normal: [], highlighted: [] };
     for (const edge of edges) {
         if (edge.hidden || edge.source.hidden || edge.target.hidden) continue;
+        const s = edge.source, t = edge.target;
+        if (Math.max(s.x, t.x) < x0 - pad || Math.min(s.x, t.x) > x1 + pad ||
+            Math.max(s.y, t.y) < y0 - pad || Math.min(s.y, t.y) > y1 + pad) continue;
 
         const isDimmed = highlightedEdges && !highlightedEdges[edge.index];
         const isHighlighted = highlightedEdges && highlightedEdges[edge.index];
 
         // If hover dimming (no highlight active, but hovered)
         const isHoverDimmed = hoveredNode && !highlightedNodes &&
-            edge.source.id !== hoveredNode.id && edge.target.id !== hoveredNode.id;
+            s.id !== hoveredNode.id && t.id !== hoveredNode.id;
 
-        if (isDimmed || isHoverDimmed) {
-            ctx.strokeStyle = "rgba(30,30,50,0.15)";
-            ctx.lineWidth = 0.5;
-        } else {
-            ctx.strokeStyle = isHighlighted ? "#e94560" : "rgba(83,52,131,0.5)";
-            ctx.lineWidth = isHighlighted ? 3 : 1.5;
-        }
+        batches[isDimmed || isHoverDimmed ? "dimmed" : isHighlighted ? "highlighted" : "normal"].push(edge);
+    }
+
+    for (const [style, batch] of Object.entries(batches)) {
+        if (!batch.length) continue;
+        const { stroke, width } = EDGE_STYLES[style];
+        ctx.strokeStyle = ctx.fillStyle = stroke;
+        ctx.lineWidth = width;
 
         ctx.beginPath();
-        ctx.moveTo(edge.source.x, edge.source.y);
-        ctx.lineTo(edge.target.x, edge.target.y);
+        for (const edge of batch) {
+            ctx.moveTo(edge.source.x, edge.source.y);
+            ctx.lineTo(edge.target.x, edge.target.y);
+        }
         ctx.stroke();
 
-        // Arrow
+        // Arrows
         if (zoomLevel > 0.3) {
-            const dx = edge.target.x - edge.source.x;
-            const dy = edge.target.y - edge.source.y;
-            const len = Math.sqrt(dx * dx + dy * dy);
-            if (len > 0) {
+            const arrowSize = 4 + width;
+            ctx.beginPath();
+            for (const edge of batch) {
+                const dx = edge.target.x - edge.source.x;
+                const dy = edge.target.y - edge.source.y;
+                const len = Math.sqrt(dx * dx + dy * dy);
+                if (len === 0) continue;
                 const nx = dx / len;
                 const ny = dy / len;
                 const targetR = edge.target.size / 2;
                 const ax = edge.target.x - nx * targetR;
                 const ay = edge.target.y - ny * targetR;
-                const arrowSize = 4 + ctx.lineWidth;
-                ctx.fillStyle = ctx.strokeStyle;
-                ctx.beginPath();
                 ctx.moveTo(ax, ay);
                 ctx.lineTo(ax - nx * arrowSize - ny * arrowSize * 0.4, ay - ny * arrowSize + nx * arrowSize * 0.4);
                 ctx.lineTo(ax - nx * arrowSize + ny * arrowSize * 0.4, ay - ny * arrowSize - nx * arrowSize * 0.4);
                 ctx.closePath();
-                ctx.fill();
             }
+            ctx.fill();
         }
     }
 
     // Draw nodes
+    let lastFont = null;
     for (const node of nodes) {
         if (node.hidden) continue;
+        if (node.x < x0 - LABEL_MARGIN || node.x > x1 + pad || node.y < y0 - pad || node.y > y1 + pad) continue;
 
         const isDimmed = highlightedNodes && !highlightedNodes[node.id];
         const isHighlighted = highlightedNodes && highlightedNodes[node.id];
@@ -378,14 +444,17 @@ function draw() {
         }
 
         // Node circle / image
-        const img = imageCache.get(node.id);
-        if (img && img.complete && img.naturalWidth > 0) {
+        const cached = imageCache.get(node.id);
+        if (cached && r * 2 * zoomLevel * dpr <= THUMB_SIZE) {
+            ctx.drawImage(cached.thumb, node.x - r, node.y - r, r * 2, r * 2);
+        } else if (cached) {
+            // Zoomed in past the thumbnail's resolution: few nodes are on screen, clip the full image
             ctx.save();
             ctx.beginPath();
             ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
             ctx.closePath();
             ctx.clip();
-            ctx.drawImage(img, node.x - r, node.y - r, r * 2, r * 2);
+            ctx.drawImage(cached.img, node.x - r, node.y - r, r * 2, r * 2);
             ctx.restore();
         } else {
             ctx.fillStyle = node.color;
@@ -412,9 +481,10 @@ function draw() {
         ctx.globalAlpha = 1;
 
         // Labels (only when zoomed in enough)
-        if (zoomLevel > 0.5 && !isDimmed && !isHoverDimmed) {
+        if (showLabels && zoomLevel > 0.5 && !isDimmed && !isHoverDimmed) {
             const fontSize = isHovered ? 13 : 11;
-            ctx.font = `${isHovered ? "bold " : ""}${fontSize}px monospace`;
+            const font = isHovered ? "bold 13px monospace" : "11px monospace";
+            if (font !== lastFont) ctx.font = lastFont = font; // setting ctx.font re-parses it; skip when unchanged
             const labelX = node.x + r + 3;
             const labelY = node.y + fontSize / 3;
             ctx.strokeStyle = "#0a0a1a";
@@ -594,31 +664,75 @@ export function getVisibility() {
 }
 
 // ── Tooltip ───────────────────────────────────────────────────
+let tooltipNode = null;
+
 function showTooltip(node, event) {
     const tooltip = document.getElementById("tooltip");
-    const img = document.getElementById("tooltip-img");
-
-    document.getElementById("tooltip-name").textContent = node.id;
-    const info = [];
-    if (node.nodeType === "ingredient") info.push("Base ingredient");
-    if (node.hearts > 0) info.push(`${node.hearts} hearts`);
-    document.getElementById("tooltip-info").textContent = info.join(" — ");
-
-    if (node.image) {
-        img.src = node.image;
-        img.style.display = "block";
-    } else {
-        img.style.display = "none";
+    if (tooltipNode !== node) {
+        tooltipNode = node;
+        tooltip.innerHTML = tooltipHtml(node);
     }
 
     tooltip.style.display = "block";
+    const { offsetWidth: w, offsetHeight: h } = tooltip;
     const x = event.clientX + 15;
     const y = event.clientY + 15;
-    tooltip.style.left = (x + 210 > window.innerWidth ? x - 230 : x) + "px";
-    tooltip.style.top = (y + 120 > window.innerHeight ? y - 130 : y) + "px";
+    tooltip.style.left = (x + w > window.innerWidth ? event.clientX - w - 15 : x) + "px";
+    tooltip.style.top = (y + h > window.innerHeight ? Math.max(0, event.clientY - h - 15) : y) + "px";
+}
+
+const NODE_TYPE_LABELS = {
+    ingredient: "Pure ingredient",
+    deadend: "Dead end",
+    bridge: "Bridge",
+    isolated: "Isolated",
+};
+
+function tooltipHtml(node) {
+    const img = (name, cls) => {
+        const src = nodeById.get(name)?.image;
+        return src ? `<img class="${cls}" src="${escHtml(src)}" alt="">` : `<div class="${cls}"></div>`;
+    };
+    const plural = (n, word) => `${n} ${word}${n > 1 ? "s" : ""}`;
+
+    const badges = [`<span class="badge badge-${node.nodeType}">${NODE_TYPE_LABELS[node.nodeType]}</span>`];
+    if (node.hearts > 0) badges.push(`<span class="badge badge-hearts">♥ ${node.hearts}</span>`);
+
+    const first = node.recipes[0];
+    let recipe = "";
+    const meta = [];
+    if (first) {
+        recipe = `
+            <div class="tt-recipe">
+                <div class="tt-ingredient">${img(first.inputA, "tt-thumb")}<span>${escHtml(first.inputA)}</span></div>
+                <div class="tt-plus">+</div>
+                <div class="tt-ingredient">${img(first.inputB, "tt-thumb")}<span>${escHtml(first.inputB)}</span></div>
+            </div>
+            ${node.recipes.length > 1 ? `<div class="tt-more">+${plural(node.recipes.length - 1, "other recipe")}</div>` : ""}`;
+        const fmt = (d) => new Date(d).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+        // The drawing and its recipe were often made by different people, sometimes years apart
+        const drawnAt = first.drawnAt || first.date;
+        const artist = first.artist || first.creator;
+        if (drawnAt) meta.push(["Drawn", fmt(drawnAt)]);
+        meta.push(["Artist", escHtml(artist)]);
+        if (first.creator !== artist || (first.date && first.date !== drawnAt)) {
+            meta.push(["Recipe", `${escHtml(first.creator)}${first.date ? `, ${fmt(first.date)}` : ""}`]);
+        }
+    } else {
+        meta.push(["Drawn", `<span class="tt-muted">Unknown</span>`]);
+    }
+    if (node.usedIn > 0) meta.push(["Used in", plural(node.usedIn, "combination")]);
+
+    return `
+        ${img(node.id, "tt-image")}
+        <div class="tt-name">${escHtml(node.id)}</div>
+        <div class="tt-badges">${badges.join("")}</div>
+        ${recipe}
+        <dl class="tt-meta">${meta.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("")}</dl>`;
 }
 
 function hideTooltip() {
+    tooltipNode = null;
     document.getElementById("tooltip").style.display = "none";
 }
 
@@ -672,7 +786,7 @@ function pathNode(node) {
 }
 
 function escHtml(str) {
-    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function hidePathBar() {

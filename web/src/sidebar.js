@@ -6,6 +6,7 @@ export function buildUI(nodes, edges, nodeById, data, actions) {
     buildFilters(nodes, edges, data, actions);
     buildChains(data.chains, actions);
     buildOutcomes(data.outcomes, nodeById, actions);
+    buildMostUsed(nodes, nodeById, actions);
     initSidebarToggle();
 }
 
@@ -215,6 +216,30 @@ function buildOutcomes(outcomes, nodeById, actions) {
             actions.zoomToNode(result);
             actions.highlightComponent(result);
         }
+    });
+}
+
+// ── Most used in combinations ─────────────────────────────────
+function buildMostUsed(nodes, nodeById, actions) {
+    const list = document.getElementById("most-used-list");
+    const top = nodes.filter((n) => n.usedIn > 0).sort((a, b) => b.usedIn - a.usedIn).slice(0, 50);
+
+    list.innerHTML = top
+        .map((n, i) =>
+            `<div class="outcome-item used-item" data-name="${esc(n.id)}">
+                <span class="used-rank">${i + 1}</span>
+                ${n.image ? `<img src="${esc(n.image)}" alt="" onerror="this.style.visibility='hidden'">` : "<span class=\"used-img\"></span>"}
+                <strong class="used-name">${escHtml(n.id)}</strong>
+                <span class="used-count">${n.usedIn}×</span>
+            </div>`
+        )
+        .join("");
+
+    list.addEventListener("click", (e) => {
+        const item = e.target.closest(".used-item");
+        if (!item || !nodeById.has(item.dataset.name)) return;
+        actions.zoomToNode(item.dataset.name);
+        actions.highlightComponent(item.dataset.name);
     });
 }
 

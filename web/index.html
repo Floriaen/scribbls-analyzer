@@ -13,9 +13,6 @@
 
     <!-- Node tooltip -->
     <div id="tooltip" class="tooltip" style="display:none;">
-        <img id="tooltip-img" src="" alt="">
-        <div id="tooltip-name"></div>
-        <div id="tooltip-info"></div>
     </div>
 
     <!-- Sidebar -->
@@ -60,6 +57,9 @@
                 <div class="filter-row">
                     <label><input type="checkbox" id="filter-bridges" checked> Bridge nodes</label>
                 </div>
+                <div class="filter-row">
+                    <label><input type="checkbox" id="show-labels" checked> Show labels</label>
+                </div>
             </div>
         </div>
 
@@ -73,6 +73,12 @@
         <div class="panel collapsed">
             <h2 class="panel-toggle">Top Outcomes</h2>
             <div class="panel-body" id="outcomes-list"></div>
+        </div>
+
+        <!-- Most used in combinations -->
+        <div class="panel collapsed">
+            <h2 class="panel-toggle">Most Used</h2>
+            <div class="panel-body" id="most-used-list"></div>
         </div>
 
     </div>
