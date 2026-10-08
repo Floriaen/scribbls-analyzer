@@ -28,6 +28,7 @@ fetch("data.json")
         maxHearts = data.stats.maxHearts || 1;
         buildGraph(data);
         initRenderer();
+        initLayoutPicker(data.layouts);
         zoomToFit(nodes, { trimOutliers: true, duration: 0 });
         buildUI(nodes, edges, nodeById, data, {
             highlightComponent, highlightPath, resetHighlight, requestDraw,
@@ -282,6 +283,29 @@ function initFocusLayer() {
             ctx.lineTo(ax - nx * arrow + ny * arrow * 0.4, ay - ny * arrow - nx * arrow * 0.4);
             ctx.fill();
         }
+    });
+}
+
+// ── Layout picker ─────────────────────────────────────────────
+// data.layouts holds every layout computed by bake-layout.js, flat [x0, y0, x1, y1, ...] in node order
+function initLayoutPicker(layouts) {
+    if (!layouts) return;
+    const select = document.getElementById("layout-select");
+    select.innerHTML = Object.keys(layouts).map((name) => `<option>${escHtml(name)}</option>`).join("");
+    document.getElementById("layout-row").style.display = "";
+
+    select.addEventListener("change", () => {
+        const flat = layouts[select.value];
+        nodes.forEach((n, i) => {
+            n.x = flat[2 * i];
+            n.y = flat[2 * i + 1];
+        });
+        graph.updateEachNodeAttributes((id, attrs) => {
+            const n = nodeById.get(id);
+            return { ...attrs, x: n.x, y: -n.y };
+        });
+        renderer.refresh(); // reframes to the new bounding box, which zoomToFit relies on
+        zoomToFit(nodes, { trimOutliers: true, duration: 0 });
     });
 }
 

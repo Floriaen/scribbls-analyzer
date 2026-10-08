@@ -81,7 +81,7 @@ sqlite3 data/scribbls.db "SELECT status, COUNT(*) FROM crawl_state GROUP BY stat
 
 ## Web — Graph Explorer
 
-An interactive graph of the drawing combinations, rendered with [sigma.js](https://www.sigmajs.org/) (WebGL). Nodes are drawings, edges are combinations. Node positions come from a d3-force layout computed ahead of time, so the graph opens already laid out.
+An interactive graph of the drawing combinations, rendered with [sigma.js](https://www.sigmajs.org/) (WebGL). Nodes are drawings, edges are combinations. Node positions come from force layouts computed ahead of time, so the graph opens already laid out.
 
 ### Prerequisites
 
@@ -104,8 +104,9 @@ cd web && npm run layout
 ```
 
 `export.py` writes `web/public/data.json` with nodes, edges, chains, and outcome metadata.
-`npm run layout` then runs the force layout once (~20s) and saves the final node positions
-into it, so the page opens on a settled graph.
+`npm run layout` then computes the node positions (~2 min) and saves them into it, so the page
+opens on a settled graph. It stores three layouts (ForceAtlas2, the default; ForceAtlas2 in
+LinLog mode; d3-force), and the **Layout** picker in the Filters panel switches between them.
 
 ### Run the dev server
 

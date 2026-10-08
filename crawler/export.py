@@ -63,10 +63,6 @@ def export_data(db_path: str, output_path: str):
     conn = sqlite3.connect(db_path)
     G = load_graph(db_path)
 
-    # Starting layout, refined by `npm run layout` in web/ (in graph units)
-    print("Computing layout...")
-    pos = nx.spring_layout(G, k=0.5, iterations=50, seed=42)
-
     # Nodes
     nodes = []
     for name, data in G.nodes(data=True):
@@ -77,15 +73,13 @@ def export_data(db_path: str, output_path: str):
         # Make image path relative to web/public/
         if image:
             image = "images/drawings/" + os.path.basename(image)
-        x, y = pos.get(name, (0, 0))
         nodes.append({
             "key": name,
             "image": image,
             "degree": degree,
             "inDegree": in_deg,
             "outDegree": out_deg,
-            "x": round(float(x) * 10000, 1),
-            "y": round(float(y) * 10000, 1),
+            # x, y: added by `npm run layout` in web/
         })
 
     # Edges
