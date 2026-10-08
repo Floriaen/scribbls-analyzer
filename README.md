@@ -81,7 +81,7 @@ sqlite3 data/scribbls.db "SELECT status, COUNT(*) FROM crawl_state GROUP BY stat
 
 ## Web — Graph Explorer
 
-An interactive D3.js visualization that renders the drawing combinations as a force-directed graph. Nodes are drawings, edges are combinations, and everything is rendered on Canvas for smooth performance with 1,500+ nodes.
+An interactive graph of the drawing combinations, rendered with [sigma.js](https://www.sigmajs.org/) (WebGL). Nodes are drawings, edges are combinations. Node positions come from a d3-force layout computed ahead of time, so the graph opens already laid out.
 
 ### Prerequisites
 
@@ -100,9 +100,12 @@ npm install
 
 ```bash
 python3 crawler/export.py
+cd web && npm run layout
 ```
 
-This writes `web/public/data.json` with nodes, edges, chains, and outcome metadata.
+`export.py` writes `web/public/data.json` with nodes, edges, chains, and outcome metadata.
+`npm run layout` then runs the force layout once (~20s) and saves the final node positions
+into it, so the page opens on a settled graph.
 
 ### Run the dev server
 
@@ -151,8 +154,10 @@ npm run preview  # preview the production build locally
     │       ├── drawings/ # Drawing PNGs
     │       └── avatars/  # Creator avatar PNGs
     ├── src/
-    │   ├── main.js   # Canvas rendering, force simulation, interactions
+    │   ├── main.js   # Sigma rendering, highlighting, pathfinding, tooltip
+    │   ├── forces.js # Force layout used by bake-layout.js, node sizes
     │   ├── sidebar.js# Search, filters, lists
     │   └── style.css # Dark theme styling
+    ├── bake-layout.js # Bakes node positions into data.json (npm run layout)
     └── vite.config.js
 ```

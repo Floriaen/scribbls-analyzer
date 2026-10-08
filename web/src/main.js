@@ -1,19 +1,20 @@
-import * as d3 from "d3";
+import Graph from "graphology";
+import Sigma from "sigma";
+import { createNodeImageProgram } from "@sigma/node-image";
 import { buildUI } from "./sidebar.js";
+import { nodeSize } from "./forces.js";
 import "./style.css";
 
 // ── State ─────────────────────────────────────────────────────
 let nodes = [];
 let edges = [];
 let nodeById = new Map();
-let simulation = null;
-let transform = d3.zoomIdentity;
-let highlightedNodes = null;
-let highlightedEdges = null;
+let graph = null;      // graphology graph rendered by sigma
+let renderer = null;   // sigma instance
+let highlightedNodes = null; // Set of node ids, from a click, a path or the sidebar
+let highlightedEdges = null; // [source, target] pairs drawn in red
 let hoveredNode = null;
 let selectedNode = null;
-let canvas, ctx, zoomBehavior;
-let imageCache = new Map();
 let maxHearts = 1;
 
 // Adjacency lookup for fast neighbor access
@@ -26,12 +27,10 @@ fetch("data.json")
     .then((data) => {
         maxHearts = data.stats.maxHearts || 1;
         buildGraph(data);
-        initCanvas();
-        initSimulation();
-        zoomToFit(nodes, { trimOutliers: true });
+        initRenderer();
+        zoomToFit(nodes, { trimOutliers: true, duration: 0 });
         buildUI(nodes, edges, nodeById, data, {
-            zoomToNode, highlightComponent, highlightPath, resetHighlight,
-            getVisibility, requestDraw,
+            highlightComponent, highlightPath, resetHighlight, requestDraw,
         });
         setStatus(`Ready — ${nodes.length} nodes, ${edges.length} edges`);
     })
@@ -48,6 +47,7 @@ function getNodeType(n) {
     return "isolated";
 }
 
+// Only visible until a node's drawing has loaded
 function getNodeColor(n) {
     if (n.inDegree === 0 && n.outDegree > 0) return "#e94560";
     if (n.outDegree === 0 && n.inDegree > 0) return "#16213e";
@@ -59,9 +59,8 @@ function getNodeColor(n) {
 function buildGraph(data) {
     nodes = data.nodes.map((n) => ({
         id: n.key,
-        x: n.x * 10,
-        y: n.y * 10,
-        size: 4 + Math.min(n.degree * 2, 30),
+        x: n.x, // baked by bake-layout.js
+        y: n.y,
         color: getNodeColor(n),
         image: n.image,
         degree: n.degree,
@@ -90,7 +89,7 @@ function buildGraph(data) {
     nodes.forEach((n) => n.recipes.sort((a, b) => (a.date || "").localeCompare(b.date || "")));
 
     edges = [];
-    data.edges.forEach((e, i) => {
+    data.edges.forEach((e) => {
         if (e.source === e.target) return;
         if (!nodeById.has(e.source) || !nodeById.has(e.target)) return;
         const idx = edges.length;
@@ -113,397 +112,190 @@ function buildGraph(data) {
         }
     });
 
-    // Recompute node size based on hearts
-    nodes.forEach((n) => {
-        const ratio = n.hearts / maxHearts;
-        n.size = 6 + ratio * 28;
-    });
-
-    // Preload images, plus a pre-clipped round thumbnail so most frames skip the per-node clip()
-    nodes.forEach((n) => {
-        if (n.image) {
-            const img = new Image();
-            img.src = n.image;
-            img.onload = () => {
-                const thumb = document.createElement("canvas");
-                thumb.width = thumb.height = THUMB_SIZE;
-                const t = thumb.getContext("2d");
-                t.beginPath();
-                t.arc(THUMB_SIZE / 2, THUMB_SIZE / 2, THUMB_SIZE / 2, 0, Math.PI * 2);
-                t.clip();
-                t.drawImage(img, 0, 0, THUMB_SIZE, THUMB_SIZE);
-                imageCache.set(n.id, { img, thumb });
-                draw();
-            };
-        }
-    });
+    // Sigma's y axis points up, hence -y; sizes are screen radii, hence / 4 of the diameter in graph units
+    graph = new Graph({ type: "directed" });
+    for (const n of nodes) {
+        graph.addNode(n.id, {
+            x: n.x, y: -n.y, label: n.id, image: n.image, color: n.color, size: nodeSize(n.hearts, maxHearts) / 4,
+        });
+    }
+    for (const e of edges) graph.addEdge(e.source.id, e.target.id, { size: 0.6, color: EDGE_COLOR });
 }
 
-// ponytail: fixed 64px thumbnails; past that on-screen size, draw() falls back to clipping the full image
-const THUMB_SIZE = 64;
+// ── Renderer ──────────────────────────────────────────────────
+const BACKGROUND = "#0a0a1a";
+const EDGE_COLOR = "rgba(83,52,131,0.5)";
+const RED = "#e94560";
+// While something is highlighted, everything else is covered by the background at 75%,
+// the look of drawing dimmed nodes at 25% opacity
+const DIM_OVERLAY = "rgba(10,10,26,0.75)";
+// ponytail: 64px per drawing packs 4,550 images into ~2 GPU textures (~128MB); raise for sharper zoom-in, at ~4x memory per doubling
+const IMAGE_SIZE = 64;
 
-// ── Canvas setup ──────────────────────────────────────────────
-function initCanvas() {
-    canvas = document.getElementById("graph-canvas");
-    ctx = canvas.getContext("2d");
-    resizeCanvas();
-
+function initRenderer() {
     const container = document.getElementById("graph-container");
-    new ResizeObserver(resizeCanvas).observe(container);
-
-    const labelsToggle = document.getElementById("show-labels");
-    showLabels = labelsToggle.checked;
-    labelsToggle.addEventListener("change", () => {
-        showLabels = labelsToggle.checked;
-        draw();
+    renderer = new Sigma(graph, container, {
+        defaultEdgeType: "arrow",
+        defaultNodeType: "image",
+        nodeProgramClasses: { image: createNodeImageProgram({ size: { mode: "force", value: IMAGE_SIZE } }) },
+        defaultDrawNodeLabel: drawLabel,
+        defaultDrawNodeHover: drawHover,
+        minEdgeThickness: 0.5,
+        labelSize: 11,
+        labelFont: "monospace",
+        nodeReducer,
     });
 
-    // Zoom & pan
-    zoomBehavior = d3.zoom()
-        .scaleExtent([0.05, 10])
-        .on("zoom", (event) => {
-            transform = event.transform;
-            draw();
-        });
+    // Sigma only follows window resizes; the sidebar toggle resizes the container alone
+    new ResizeObserver(() => renderer.resize() && renderer.refresh()).observe(container);
 
-    d3.select(canvas).call(zoomBehavior);
+    const labelsToggle = document.getElementById("show-labels");
+    renderer.setSetting("renderLabels", labelsToggle.checked);
+    labelsToggle.addEventListener("change", () => renderer.setSetting("renderLabels", labelsToggle.checked));
+
+    initFocusLayer();
 
     // Hover
-    canvas.addEventListener("mousemove", (event) => {
-        const [mx, my] = transformPoint(event.offsetX, event.offsetY);
-        const found = findNode(mx, my);
-        if (found !== hoveredNode) {
-            hoveredNode = found;
-            draw();
-            if (found) {
-                showTooltip(found, event);
-            } else {
-                hideTooltip();
-            }
-        } else if (found) {
-            // Update tooltip position on move
-            showTooltip(found, event);
-        }
+    renderer.on("enterNode", ({ node }) => {
+        hoveredNode = node;
+        container.style.cursor = "pointer";
+        redraw();
+    });
+    renderer.on("leaveNode", () => {
+        hoveredNode = null;
+        container.style.cursor = "";
+        hideTooltip();
+        redraw();
+    });
+    renderer.getMouseCaptor().on("mousemovebody", (e) => {
+        if (hoveredNode) showTooltip(nodeById.get(hoveredNode), e.original);
     });
 
     // Click — first click highlights neighbors, second click finds path
-    canvas.addEventListener("click", (event) => {
-        const [mx, my] = transformPoint(event.offsetX, event.offsetY);
-        const found = findNode(mx, my);
-        if (found) {
-            if (selectedNode && selectedNode !== found.id) {
-                findShortestPath(selectedNode, found.id);
-            } else if (selectedNode === found.id) {
-                resetHighlight();
-            } else {
-                selectedNode = found.id;
-                highlightComponent(found.id);
-            }
-        } else {
+    renderer.on("clickNode", ({ node }) => {
+        if (selectedNode && selectedNode !== node) {
+            findShortestPath(selectedNode, node);
+        } else if (selectedNode === node) {
             resetHighlight();
+        } else {
+            highlightComponent(node);
         }
     });
-
-    // Drag with group drag
-    let dragNode = null;
-    let dragNeighbors = null;
-    let dragStartPositions = null;
-
-    const drag = d3.drag()
-        .container(canvas)
-        .subject((event) => {
-            const [mx, my] = transformPoint(event.x, event.y);
-            const node = findNode(mx, my);
-            if (node) return { x: transform.applyX(node.x), y: transform.applyY(node.y), node };
-            return null;
-        })
-        .on("start", (event) => {
-            if (!event.subject) return;
-            dragNode = event.subject.node;
-            // Record start positions for group drag
-            dragStartPositions = new Map();
-            dragStartPositions.set(dragNode.id, { x: dragNode.x, y: dragNode.y });
-            dragNeighbors = [];
-            for (const neighborId of neighbors.get(dragNode.id)) {
-                const neighbor = nodeById.get(neighborId);
-                if (neighbor && !neighbor.hidden) {
-                    dragNeighbors.push(neighbor);
-                    dragStartPositions.set(neighbor.id, { x: neighbor.x, y: neighbor.y });
-                }
-            }
-            dragNode.fx = dragNode.x;
-            dragNode.fy = dragNode.y;
-            if (simulation) simulation.alphaTarget(0.3).restart();
-        })
-        .on("drag", (event) => {
-            if (!dragNode) return;
-            const [gx, gy] = transformPoint(event.x, event.y);
-            const startPos = dragStartPositions.get(dragNode.id);
-            const dx = gx - startPos.x;
-            const dy = gy - startPos.y;
-
-            dragNode.fx = gx;
-            dragNode.fy = gy;
-
-            // Move neighbors by same delta
-            for (const neighbor of dragNeighbors) {
-                const nStart = dragStartPositions.get(neighbor.id);
-                neighbor.fx = nStart.x + dx;
-                neighbor.fy = nStart.y + dy;
-            }
-            draw();
-        })
-        .on("end", (event) => {
-            if (!dragNode) return;
-            dragNode.fx = null;
-            dragNode.fy = null;
-            for (const neighbor of dragNeighbors) {
-                neighbor.fx = null;
-                neighbor.fy = null;
-            }
-            dragNode = null;
-            dragNeighbors = null;
-            dragStartPositions = null;
-            if (simulation) simulation.alphaTarget(0);
-        });
-
-    d3.select(canvas).call(drag);
+    renderer.on("clickStage", () => resetHighlight());
 }
 
-function resizeCanvas() {
-    const container = document.getElementById("graph-container");
-    const dpr = window.devicePixelRatio || 1;
-    canvas.width = container.clientWidth * dpr;
-    canvas.height = container.clientHeight * dpr;
-    canvas.style.width = container.clientWidth + "px";
-    canvas.style.height = container.clientHeight + "px";
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    draw();
-}
-
-function transformPoint(sx, sy) {
-    return [(sx - transform.x) / transform.k, (sy - transform.y) / transform.k];
-}
-
-function findNode(x, y) {
-    // Search in reverse order (top-rendered nodes first)
-    for (let i = nodes.length - 1; i >= 0; i--) {
-        const n = nodes[i];
-        if (n.hidden) continue;
-        const r = n.size / 2 + 2;
-        const dx = n.x - x;
-        const dy = n.y - y;
-        if (dx * dx + dy * dy < r * r) return n;
-    }
+// Nodes kept bright: the highlight, else the hovered node and its neighbors
+function focusNodes() {
+    if (highlightedNodes) return highlightedNodes;
+    if (hoveredNode) return new Set([hoveredNode, ...neighbors.get(hoveredNode)]);
     return null;
 }
 
-// ── Force simulation ──────────────────────────────────────────
-let simulationRunning = true;
+let focus = null;
 
-function initSimulation() {
-    simulation = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(edges).id((d) => d.id).distance(80).strength(0.3))
-        .force("charge", d3.forceManyBody().strength(-200).distanceMax(300))
-        .force("center", d3.forceCenter(0, 0).strength(0.05))
-        .force("collision", d3.forceCollide().radius((d) => d.size / 2 + 2))
-        .velocityDecay(0.4)
-        .on("tick", draw)
-        .on("end", () => zoomToFit(nodes.filter((n) => !n.hidden), { trimOutliers: true }));
-
-    const btn = document.getElementById("layout-toggle");
-    btn.classList.add("active");
-    btn.textContent = "Stop";
-
-    btn.addEventListener("click", () => {
-        if (simulationRunning) {
-            simulation.stop();
-            simulationRunning = false;
-            btn.classList.remove("active");
-            btn.textContent = "Layout";
-        } else {
-            simulation.alpha(1).restart();
-            simulationRunning = true;
-            btn.classList.add("active");
-            btn.textContent = "Stop";
-        }
-    });
+// Every highlight or hover change goes through here. Positions don't change, so sigma can skip re-indexing.
+function redraw() {
+    focus = focusNodes();
+    renderer.refresh({ skipIndexation: true });
 }
 
-// ── Draw ──────────────────────────────────────────────────────
-// Zoom, hover, drag, image loads and simulation ticks all call draw(); render at most once per frame.
-let drawPending = false;
-
-function draw() {
-    if (drawPending) return;
-    drawPending = true;
-    requestAnimationFrame(() => {
-        drawPending = false;
-        render();
-    });
+function nodeReducer(node, attrs) {
+    if (nodeById.get(node).hidden) return { ...attrs, hidden: true };
+    if (!focus) return attrs;
+    // Highlighted nodes are drawn by sigma above everything, including the dim layer
+    return focus.has(node) ? { ...attrs, highlighted: true, forceLabel: true } : { ...attrs, label: "" };
 }
 
-const EDGE_STYLES = {
-    dimmed: { stroke: "rgba(30,30,50,0.15)", width: 0.5 },
-    normal: { stroke: "rgba(83,52,131,0.5)", width: 1.5 },
-    highlighted: { stroke: "#e94560", width: 3 },
-};
-const LABEL_MARGIN = 200; // labels extend to the right of their node, in graph units
-let showLabels = true;
+// Labels: monospace with a dark outline, bold and white when hovered
+function drawLabel(context, node) {
+    if (!node.label) return;
+    const isHovered = node.key === hoveredNode;
+    const fontSize = isHovered ? 13 : 11;
+    context.font = isHovered ? "bold 13px monospace" : "11px monospace";
+    const x = node.x + node.size + 3;
+    const y = node.y + fontSize / 3;
+    context.lineJoin = "round";
+    context.lineWidth = isHovered ? 3 : 2;
+    context.strokeStyle = BACKGROUND;
+    context.strokeText(node.label, x, y);
+    context.fillStyle = isHovered ? "#fff" : "#ddd";
+    context.fillText(node.label, x, y);
+}
 
-function render() {
-    if (!ctx) return;
-    const w = canvas.clientWidth;
-    const h = canvas.clientHeight;
-    ctx.clearRect(0, 0, w, h);
-
-    ctx.save();
-    ctx.translate(transform.x, transform.y);
-    ctx.scale(transform.k, transform.k);
-
-    const zoomLevel = transform.k;
-    const dpr = window.devicePixelRatio || 1;
-
-    // Visible area in graph coordinates; anything outside is skipped
-    const [x0, y0] = transformPoint(0, 0);
-    const [x1, y1] = transformPoint(w, h);
-    const pad = 40;
-
-    // Draw edges, batched into one path per style
-    const batches = { dimmed: [], normal: [], highlighted: [] };
-    for (const edge of edges) {
-        if (edge.hidden || edge.source.hidden || edge.target.hidden) continue;
-        const s = edge.source, t = edge.target;
-        if (Math.max(s.x, t.x) < x0 - pad || Math.min(s.x, t.x) > x1 + pad ||
-            Math.max(s.y, t.y) < y0 - pad || Math.min(s.y, t.y) > y1 + pad) continue;
-
-        const isDimmed = highlightedEdges && !highlightedEdges[edge.index];
-        const isHighlighted = highlightedEdges && highlightedEdges[edge.index];
-
-        // If hover dimming (no highlight active, but hovered)
-        const isHoverDimmed = hoveredNode && !highlightedNodes &&
-            s.id !== hoveredNode.id && t.id !== hoveredNode.id;
-
-        batches[isDimmed || isHoverDimmed ? "dimmed" : isHighlighted ? "highlighted" : "normal"].push(edge);
+// Called by sigma for the hovered and highlighted nodes: red ring on the hovered node (3px)
+// and on the highlight (2px)
+function drawHover(context, node, settings) {
+    const isHovered = node.key === hoveredNode;
+    if (isHovered || highlightedNodes?.has(node.key)) {
+        context.strokeStyle = RED;
+        context.lineWidth = isHovered ? 3 : 2;
+        context.beginPath();
+        context.arc(node.x, node.y, node.size + (isHovered ? 2 : 1), 0, Math.PI * 2);
+        context.stroke();
     }
+    if (settings.renderLabels) drawLabel(context, node);
+}
 
-    for (const [style, batch] of Object.entries(batches)) {
-        if (!batch.length) continue;
-        const { stroke, width } = EDGE_STYLES[style];
-        ctx.strokeStyle = ctx.fillStyle = stroke;
-        ctx.lineWidth = width;
+// Dim layer above the nodes, plus the highlighted edges in red on top of it. Sigma draws all edges
+// under all nodes, so highlighted edges can only stay visible on a layer of our own.
+function initFocusLayer() {
+    // CSS size set here: sigma only sizes its own layers, and a HiDPI canvas would otherwise show at 2x
+    const layer = renderer.createCanvas("focus", { afterLayer: "nodes", style: { width: "100%", height: "100%" } });
+    const ctx = layer.getContext("2d");
 
-        ctx.beginPath();
-        for (const edge of batch) {
-            ctx.moveTo(edge.source.x, edge.source.y);
-            ctx.lineTo(edge.target.x, edge.target.y);
+    renderer.on("afterRender", () => {
+        const { width, height } = renderer.getDimensions();
+        const ratio = window.devicePixelRatio || 1;
+        if (layer.width !== width * ratio || layer.height !== height * ratio) {
+            layer.width = width * ratio;
+            layer.height = height * ratio;
         }
-        ctx.stroke();
+        ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+        ctx.clearRect(0, 0, width, height);
+        if (!highlightedNodes && !hoveredNode) return;
 
-        // Arrows
-        if (zoomLevel > 0.3) {
-            const arrowSize = 4 + width;
+        ctx.fillStyle = DIM_OVERLAY;
+        ctx.fillRect(0, 0, width, height);
+
+        const lit = highlightedEdges ??
+            [...edgesByNode.get(hoveredNode)].map((i) => [edges[i].source.id, edges[i].target.id]);
+        const arrow = 7;
+        ctx.strokeStyle = ctx.fillStyle = RED;
+        ctx.lineWidth = 2;
+        for (const [source, target] of lit) {
+            if (nodeById.get(source).hidden || nodeById.get(target).hidden) continue;
+            const s = renderer.graphToViewport(graph.getNodeAttributes(source));
+            const t = renderer.graphToViewport(graph.getNodeAttributes(target));
+            const dx = t.x - s.x, dy = t.y - s.y;
+            const len = Math.hypot(dx, dy);
+            if (len === 0) continue;
+            const nx = dx / len, ny = dy / len;
+            const r = renderer.scaleSize(renderer.getNodeDisplayData(target).size);
+            const ax = t.x - nx * r, ay = t.y - ny * r; // arrow tip on the target's edge
             ctx.beginPath();
-            for (const edge of batch) {
-                const dx = edge.target.x - edge.source.x;
-                const dy = edge.target.y - edge.source.y;
-                const len = Math.sqrt(dx * dx + dy * dy);
-                if (len === 0) continue;
-                const nx = dx / len;
-                const ny = dy / len;
-                const targetR = edge.target.size / 2;
-                const ax = edge.target.x - nx * targetR;
-                const ay = edge.target.y - ny * targetR;
-                ctx.moveTo(ax, ay);
-                ctx.lineTo(ax - nx * arrowSize - ny * arrowSize * 0.4, ay - ny * arrowSize + nx * arrowSize * 0.4);
-                ctx.lineTo(ax - nx * arrowSize + ny * arrowSize * 0.4, ay - ny * arrowSize - nx * arrowSize * 0.4);
-                ctx.closePath();
-            }
+            ctx.moveTo(s.x, s.y);
+            ctx.lineTo(ax, ay);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(ax, ay);
+            ctx.lineTo(ax - nx * arrow - ny * arrow * 0.4, ay - ny * arrow + nx * arrow * 0.4);
+            ctx.lineTo(ax - nx * arrow + ny * arrow * 0.4, ay - ny * arrow - nx * arrow * 0.4);
             ctx.fill();
         }
-    }
-
-    // Draw nodes
-    let lastFont = null;
-    for (const node of nodes) {
-        if (node.hidden) continue;
-        if (node.x < x0 - LABEL_MARGIN || node.x > x1 + pad || node.y < y0 - pad || node.y > y1 + pad) continue;
-
-        const isDimmed = highlightedNodes && !highlightedNodes[node.id];
-        const isHighlighted = highlightedNodes && highlightedNodes[node.id];
-        const isHovered = hoveredNode && hoveredNode.id === node.id;
-
-        // Hover dimming
-        const isHoverDimmed = hoveredNode && !highlightedNodes &&
-            node.id !== hoveredNode.id && !neighbors.get(hoveredNode.id).has(node.id);
-
-        const r = node.size / 2;
-
-        if (isDimmed || isHoverDimmed) {
-            ctx.globalAlpha = 0.25;
-        }
-
-        // Node circle / image
-        const cached = imageCache.get(node.id);
-        if (cached && r * 2 * zoomLevel * dpr <= THUMB_SIZE) {
-            ctx.drawImage(cached.thumb, node.x - r, node.y - r, r * 2, r * 2);
-        } else if (cached) {
-            // Zoomed in past the thumbnail's resolution: few nodes are on screen, clip the full image
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-            ctx.closePath();
-            ctx.clip();
-            ctx.drawImage(cached.img, node.x - r, node.y - r, r * 2, r * 2);
-            ctx.restore();
-        } else {
-            ctx.fillStyle = node.color;
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, r, 0, Math.PI * 2);
-            ctx.fill();
-        }
-
-        // Highlight / hover border
-        if (isHovered) {
-            ctx.strokeStyle = "#e94560";
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, r + 2, 0, Math.PI * 2);
-            ctx.stroke();
-        } else if (isHighlighted) {
-            ctx.strokeStyle = "#e94560";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.arc(node.x, node.y, r + 1, 0, Math.PI * 2);
-            ctx.stroke();
-        }
-
-        ctx.globalAlpha = 1;
-
-        // Labels (only when zoomed in enough)
-        if (showLabels && zoomLevel > 0.5 && !isDimmed && !isHoverDimmed) {
-            const fontSize = isHovered ? 13 : 11;
-            const font = isHovered ? "bold 13px monospace" : "11px monospace";
-            if (font !== lastFont) ctx.font = lastFont = font; // setting ctx.font re-parses it; skip when unchanged
-            const labelX = node.x + r + 3;
-            const labelY = node.y + fontSize / 3;
-            ctx.strokeStyle = "#0a0a1a";
-            ctx.lineWidth = isHovered ? 3 : 2;
-            ctx.lineJoin = "round";
-            ctx.strokeText(node.id, labelX, labelY);
-            ctx.fillStyle = isHovered ? "#fff" : "#ddd";
-            ctx.fillText(node.id, labelX, labelY);
-        }
-    }
-
-    ctx.restore();
+    });
 }
 
 // ── Highlight / zoom ──────────────────────────────────────────
-function zoomToFit(fitNodes, { trimOutliers = false } = {}) {
+// Camera positions are in sigma's "framed graph" space (the graph's bounding box mapped to 0..1)
+function toFramed(id) {
+    return renderer.viewportToFramedGraph(renderer.graphToViewport(graph.getNodeAttributes(id)));
+}
+
+const FIT_PADDING = 60;   // px around fitted nodes
+const MIN_FIT_RATIO = 0.05; // closest zoom when fitting a few nearby nodes
+
+function zoomToFit(fitNodes, { trimOutliers = false, duration = 400 } = {}) {
     if (fitNodes.length === 0) return;
-    const container = document.getElementById("graph-container");
-    const padding = 60;
 
     let subset = fitNodes;
     if (trimOutliers && fitNodes.length > 20) {
@@ -519,79 +311,49 @@ function zoomToFit(fitNodes, { trimOutliers = false } = {}) {
 
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const n of subset) {
-        const r = n.size / 2;
-        if (n.x - r < minX) minX = n.x - r;
-        if (n.y - r < minY) minY = n.y - r;
-        if (n.x + r > maxX) maxX = n.x + r;
-        if (n.y + r > maxY) maxY = n.y + r;
+        const p = toFramed(n.id);
+        if (p.x < minX) minX = p.x;
+        if (p.y < minY) minY = p.y;
+        if (p.x > maxX) maxX = p.x;
+        if (p.y > maxY) maxY = p.y;
     }
 
-    const bw = maxX - minX;
-    const bh = maxY - minY;
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-    const scale = Math.min(
-        (container.clientWidth - padding * 2) / (bw || 1),
-        (container.clientHeight - padding * 2) / (bh || 1),
-        6
-    );
+    // Size of the padded viewport in framed units at ratio 1; the ratio scales it linearly
+    const { width, height } = renderer.getDimensions();
+    const base = { cameraState: { x: 0.5, y: 0.5, ratio: 1, angle: 0 } };
+    const a = renderer.viewportToFramedGraph({ x: FIT_PADDING, y: FIT_PADDING }, base);
+    const b = renderer.viewportToFramedGraph({ x: width - FIT_PADDING, y: height - FIT_PADDING }, base);
+    const ratio = Math.max((maxX - minX) / Math.abs(b.x - a.x), (maxY - minY) / Math.abs(b.y - a.y), MIN_FIT_RATIO);
 
-    const newTransform = d3.zoomIdentity
-        .translate(container.clientWidth / 2, container.clientHeight / 2)
-        .scale(scale)
-        .translate(-cx, -cy);
-
-    d3.select(canvas)
-        .transition()
-        .duration(400)
-        .call(zoomBehavior.transform, newTransform);
+    const state = { x: (minX + maxX) / 2, y: (minY + maxY) / 2, ratio };
+    if (duration) renderer.getCamera().animate(state, { duration });
+    else renderer.getCamera().setState(state);
 }
 
 export function highlightComponent(startNodeId) {
     if (!nodeById.has(startNodeId)) return;
 
-    highlightedNodes = { [startNodeId]: true };
-    highlightedEdges = {};
-
-    for (const neighborId of neighbors.get(startNodeId)) {
-        highlightedNodes[neighborId] = true;
-    }
-    for (const idx of edgesByNode.get(startNodeId)) {
-        highlightedEdges[idx] = true;
-    }
-
+    highlightedNodes = new Set([startNodeId, ...neighbors.get(startNodeId)]);
+    highlightedEdges = [...edgesByNode.get(startNodeId)].map((i) => [edges[i].source.id, edges[i].target.id]);
     selectedNode = startNodeId;
-    draw();
+    redraw();
 
     // Zoom to fit the node and its neighbors
-    const fitNodes = [nodeById.get(startNodeId)];
-    for (const neighborId of neighbors.get(startNodeId)) {
-        fitNodes.push(nodeById.get(neighborId));
-    }
-    zoomToFit(fitNodes);
+    zoomToFit([...highlightedNodes].map((id) => nodeById.get(id)));
 
     setStatus(`${startNodeId} — click another node to find path`);
 }
 
 export function highlightPath(path) {
-    highlightedNodes = {};
-    highlightedEdges = {};
-    path.forEach((n) => { highlightedNodes[n] = true; });
-
+    highlightedNodes = new Set(path);
+    highlightedEdges = [];
     for (let i = 0; i < path.length - 1; i++) {
-        const srcId = path[i];
-        const tgtId = path[i + 1];
-        for (const idx of (edgesByNode.get(srcId) || [])) {
-            const edge = edges[idx];
-            if ((edge.source.id === srcId && edge.target.id === tgtId) ||
-                (edge.source.id === tgtId && edge.target.id === srcId)) {
-                highlightedEdges[idx] = true;
-            }
-        }
+        const [a, b] = [path[i], path[i + 1]];
+        highlightedEdges.push(graph.hasEdge(a, b) ? [a, b] : [b, a]);
     }
 
     selectedNode = null;
-    draw();
+    redraw();
 
     zoomToFit(path.map((id) => nodeById.get(id)).filter(Boolean));
     showPathBar(path);
@@ -640,27 +402,7 @@ export function resetHighlight() {
     selectedNode = null;
     document.querySelectorAll(".chain-item.active").forEach((el) => el.classList.remove("active"));
     hidePathBar();
-    draw();
-}
-
-export function zoomToNode(nodeKey) {
-    const node = nodeById.get(nodeKey);
-    if (!node) return;
-    const container = document.getElementById("graph-container");
-    const targetZoom = 4;
-    const newTransform = d3.zoomIdentity
-        .translate(container.clientWidth / 2, container.clientHeight / 2)
-        .scale(targetZoom)
-        .translate(-node.x, -node.y);
-
-    d3.select(canvas)
-        .transition()
-        .duration(400)
-        .call(zoomBehavior.transform, newTransform);
-}
-
-export function getVisibility() {
-    return { highlightedNodes, highlightedEdges };
+    redraw();
 }
 
 // ── Tooltip ───────────────────────────────────────────────────
@@ -800,5 +542,14 @@ export function setStatus(text) {
     document.getElementById("status-text").textContent = text;
 }
 
-// Expose for sidebar to trigger redraw
-export function requestDraw() { draw(); }
+// Expose for sidebar to trigger redraw. Filters change node.hidden, which needs a full refresh (label grid).
+export function requestDraw() {
+    // Sigma sends no leaveNode when the hovered node gets hidden: drop the hover ourselves
+    if (hoveredNode && nodeById.get(hoveredNode).hidden) {
+        hoveredNode = null;
+        hideTooltip();
+        document.getElementById("graph-container").style.cursor = "";
+    }
+    focus = focusNodes();
+    renderer.refresh();
+}

@@ -6,10 +6,8 @@
     <title>Scribbls Graph Explorer</title>
 </head>
 <body>
-    <!-- Graph canvas -->
-    <div id="graph-container">
-        <canvas id="graph-canvas"></canvas>
-    </div>
+    <!-- Graph (sigma.js creates its canvases in here) -->
+    <div id="graph-container"></div>
 
     <!-- Node tooltip -->
     <div id="tooltip" class="tooltip" style="display:none;">
@@ -20,7 +18,6 @@
         <div class="sidebar-header">
             <h1>Scribbls</h1>
             <div class="sidebar-actions">
-                <button id="layout-toggle" title="Toggle force layout">Layout</button>
                 <button id="sidebar-toggle" title="Collapse sidebar">&laquo;</button>
             </div>
         </div>

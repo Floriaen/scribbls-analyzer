@@ -111,7 +111,6 @@ function buildSearch(nodes, actions) {
         const item = e.target.closest(".search-result");
         if (!item) return;
         const nodeKey = item.dataset.node;
-        actions.zoomToNode(nodeKey);
         actions.highlightComponent(nodeKey);
         input.value = nodeKey;
         results.innerHTML = "";
@@ -213,7 +212,6 @@ function buildOutcomes(outcomes, nodeById, actions) {
         if (!item) return;
         const result = item.dataset.result;
         if (nodeById.has(result)) {
-            actions.zoomToNode(result);
             actions.highlightComponent(result);
         }
     });
@@ -238,7 +236,6 @@ function buildMostUsed(nodes, nodeById, actions) {
     list.addEventListener("click", (e) => {
         const item = e.target.closest(".used-item");
         if (!item || !nodeById.has(item.dataset.name)) return;
-        actions.zoomToNode(item.dataset.name);
         actions.highlightComponent(item.dataset.name);
     });
 }

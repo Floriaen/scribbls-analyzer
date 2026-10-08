@@ -13,7 +13,7 @@ body {
     width: 100vw;
 }
 
-/* Graph canvas */
+/* Graph */
 #graph-container {
     position: absolute;
     top: 0;
@@ -28,12 +28,6 @@ body {
 
 #graph-container.full-width {
     right: 0;
-}
-
-#graph-canvas {
-    width: 100%;
-    height: 100%;
-    display: block;
 }
 
 /* Sidebar */
@@ -75,29 +69,6 @@ body {
 .sidebar-actions {
     display: flex;
     gap: 6px;
-}
-
-#layout-toggle {
-    background: none;
-    border: 1px solid #333;
-    color: #aaa;
-    font-size: 11px;
-    cursor: pointer;
-    padding: 4px 10px;
-    border-radius: 4px;
-    transition: all 0.15s;
-    font-family: inherit;
-}
-
-#layout-toggle:hover {
-    color: #e94560;
-    border-color: #e94560;
-}
-
-#layout-toggle.active {
-    background: #e94560;
-    color: #fff;
-    border-color: #e94560;
 }
 
 #sidebar-toggle, #sidebar-open {

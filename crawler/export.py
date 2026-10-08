@@ -63,7 +63,7 @@ def export_data(db_path: str, output_path: str):
     conn = sqlite3.connect(db_path)
     G = load_graph(db_path)
 
-    # Pre-compute layout
+    # Starting layout, refined by `npm run layout` in web/ (in graph units)
     print("Computing layout...")
     pos = nx.spring_layout(G, k=0.5, iterations=50, seed=42)
 
@@ -84,8 +84,8 @@ def export_data(db_path: str, output_path: str):
             "degree": degree,
             "inDegree": in_deg,
             "outDegree": out_deg,
-            "x": round(float(x) * 1000, 2),
-            "y": round(float(y) * 1000, 2),
+            "x": round(float(x) * 10000, 1),
+            "y": round(float(y) * 10000, 1),
         })
 
     # Edges
